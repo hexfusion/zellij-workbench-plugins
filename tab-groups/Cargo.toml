@@ -1,0 +1,10 @@
+[package]
+name = "tab-groups"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Zellij tab-bar plugin: renders grouped, clickable sub-tabs for the workbench workspace manager."
+repository = "https://github.com/hexfusion/zellij-workbench-plugins"
+
+[dependencies]
+zellij-tile = "0.44"

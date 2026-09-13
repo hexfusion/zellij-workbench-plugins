@@ -1,0 +1,10 @@
+[package]
+name = "tab-stats"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Zellij status-line plugin: shows the focused tab's workbench session, agent account, and spend."
+repository = "https://github.com/hexfusion/zellij-workbench-plugins"
+
+[dependencies]
+zellij-tile = "0.44"

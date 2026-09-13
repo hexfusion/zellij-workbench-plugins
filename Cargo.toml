@@ -1,0 +1,8 @@
+[workspace]
+members = ["tab-stats", "tab-groups"]
+resolver = "2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
