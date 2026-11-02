@@ -1,5 +1,5 @@
 [workspace]
-members = ["tab-stats", "tab-groups"]
+members = ["tab-stats", "tab-groups", "context-rail"]
 resolver = "2"
 
 [profile.release]

@@ -1,12 +1,11 @@
-//! tab-groups renders workbench tabs in two levels.
-//!
-//! Group membership comes from plugin configuration: each config entry is one
-//! group, its key the group name and its value a comma-separated list of member
-//! tab names. A tab in a group collapses under a clickable group chip on the top
-//! row; the active group's members expand as sub-tabs on the row below. Tabs in
-//! no group render as standalone top-row entries. Left-clicking a chip or a
-//! sub-tab switches to it. Zellij tabs stay flat underneath; this plugin only
-//! changes how they are presented and navigated.
+//! tab-groups renders workbench tabs in two levels, deriving groups live from
+//! tab names: a tab named `<group>.<member>` belongs to `<group>` and shows as
+//! `<member>` under a clickable group chip on the top row; the active group's
+//! members expand as sub-tabs on the row below. A tab with no dot is standalone.
+//! Membership is derived from the live tab list on every update, so tabs created
+//! after launch (e.g. by `workbench spawn`) appear in every tab's bar without a
+//! reload. Left-clicking a chip or a sub-tab switches to it. Zellij tabs stay
+//! flat underneath; this plugin only changes how they are presented.
 
 use std::collections::BTreeMap;
 use zellij_tile::prelude::*;
@@ -14,26 +13,17 @@ use zellij_tile::prelude::*;
 #[derive(Default)]
 struct State {
     tabs: Vec<TabInfo>,
-    /// Groups in configured order: (group name, member tab names).
-    groups: Vec<(String, Vec<String>)>,
     /// Clickable regions from the last render: (row, start_col, end_col, tab position).
     hits: Vec<(usize, usize, usize, usize)>,
 }
 
+/// The group a tab belongs to: the segment before the first '.', if any.
+fn group_of(name: &str) -> Option<&str> {
+    name.split_once('.').map(|(g, _)| g)
+}
+
 impl ZellijPlugin for State {
-    fn load(&mut self, config: BTreeMap<String, String>) {
-        self.groups = config
-            .into_iter()
-            .map(|(name, members)| {
-                let members = members
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|m| !m.is_empty())
-                    .map(str::to_owned)
-                    .collect();
-                (name, members)
-            })
-            .collect();
+    fn load(&mut self, _config: BTreeMap<String, String>) {
         request_permission(&[
             PermissionType::ReadApplicationState,
             PermissionType::ChangeApplicationState,
@@ -66,7 +56,7 @@ impl ZellijPlugin for State {
             .tabs
             .iter()
             .find(|t| t.active)
-            .and_then(|t| self.group_of(&t.name))
+            .and_then(|t| group_of(&t.name))
             .map(str::to_owned);
 
         // Top row: standalone tabs and one chip per group, in tab order.
@@ -74,7 +64,7 @@ impl ZellijPlugin for State {
         let mut col = 0usize;
         let mut seen: Vec<String> = Vec::new();
         for t in &self.tabs {
-            match self.group_of(&t.name) {
+            match group_of(&t.name) {
                 None => {
                     let seg = format!(" {} ", t.name);
                     push_seg(&mut top, &mut hits, &mut col, 0, &seg, t.active, t.position);
@@ -95,16 +85,16 @@ impl ZellijPlugin for State {
         }
         top.push_str(&ansi(250, 236, &" ".repeat(cols.saturating_sub(col))));
 
-        // Bottom row: the active group's members, in configured order.
+        // Bottom row: the active group's members, in tab order, shown short.
         let mut bottom = String::new();
         if rows >= 2 {
             let mut bcol = 0usize;
             if let Some(g) = active_group.as_deref() {
-                for member in self.members(g) {
-                    if let Some(t) = self.tabs.iter().find(|t| &t.name == member) {
-                        let seg = format!(" {} ", t.name);
-                        push_seg(&mut bottom, &mut hits, &mut bcol, 1, &seg, t.active, t.position);
-                    }
+                let prefix = format!("{g}.");
+                for t in self.tabs.iter().filter(|t| group_of(&t.name) == Some(g)) {
+                    let label = t.name.strip_prefix(&prefix).unwrap_or(&t.name);
+                    let seg = format!(" {label} ");
+                    push_seg(&mut bottom, &mut hits, &mut bcol, 1, &seg, t.active, t.position);
                 }
             }
             bottom.push_str(&ansi(250, 233, &" ".repeat(cols.saturating_sub(bcol))));
@@ -120,30 +110,10 @@ impl ZellijPlugin for State {
 }
 
 impl State {
-    /// The group whose members include `name`, if any.
-    fn group_of(&self, name: &str) -> Option<&str> {
-        self.groups
-            .iter()
-            .find(|(_, members)| members.iter().any(|m| m == name))
-            .map(|(group, _)| group.as_str())
-    }
-
-    /// The configured members of `group`.
-    fn members(&self, group: &str) -> &[String] {
-        self.groups
-            .iter()
-            .find(|(name, _)| name == group)
-            .map_or(&[], |(_, members)| members.as_slice())
-    }
-
     /// Tab position a group chip switches to: the group's active member if any,
-    /// otherwise its first member that exists as a live tab.
+    /// otherwise its first live member.
     fn group_target(&self, group: &str) -> Option<usize> {
-        let live = || {
-            self.members(group)
-                .iter()
-                .filter_map(|m| self.tabs.iter().find(|t| &t.name == m))
-        };
+        let live = || self.tabs.iter().filter(|t| group_of(&t.name) == Some(group));
         live().find(|t| t.active).or_else(|| live().next()).map(|t| t.position)
     }
 

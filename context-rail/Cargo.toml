@@ -1,0 +1,12 @@
+[package]
+name = "context-rail"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Zellij side-pane plugin: shows the focused session's context and its group's roster for the workbench workspace manager."
+repository = "https://github.com/hexfusion/zellij-workbench-plugins"
+
+[dependencies]
+zellij-tile = "0.44"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
